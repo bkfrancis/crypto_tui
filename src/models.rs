@@ -1,31 +1,30 @@
 // TODO
 // - parse TkrData out of String
 
-use serde::{Serialize, Deserialize};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct TkrData {
-    pub h: String,        // Price of the 24h highest trade
-    pub l: String,        // Price of the 24h lowest trade, null if there weren't any trades
-    pub a: String,    // The price of the latest trade, null if there weren't any trades
-    pub i: String,     // Instrument name
-    pub v: String,        // The total 24h traded volume
-    pub vv: String,    // The total 24h traded volume value (in USD)
-    pub oi: String,       // Open interest
-    pub c: String,      // 24-hour price change, null if there weren't any trades
-    pub b: String,    // The current best bid price, null if there aren't any bids
-    pub k: String,    // The current best ask price, null if there aren't any asks
+    pub h: String,  // Price of the 24h highest trade
+    pub l: String,  // Price of the 24h lowest trade, null if there weren't any trades
+    pub a: String,  // The price of the latest trade, null if there weren't any trades
+    pub i: String,  // Instrument name
+    pub v: String,  // The total 24h traded volume
+    pub vv: String, // The total 24h traded volume value (in USD)
+    pub oi: String, // Open interest
+    pub c: String,  // 24-hour price change, null if there weren't any trades
+    pub b: String,  // The current best bid price, null if there aren't any bids
+    pub k: String,  // The current best ask price, null if there aren't any asks
     pub t: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TkrResult {
-    #[serde(rename="instrument_name")]
+    #[serde(rename = "instrument_name")]
     pub tkr: String,
     subscription: String,
     channel: String,
-    pub data: Vec<TkrData>
+    pub data: Vec<TkrData>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -34,13 +33,6 @@ pub struct TkrResponse {
     method: String,
     code: i64,
     pub result: TkrResult,
-}
-
-
-#[derive(Clone)]
-pub struct CryptoData<'a> {
-    pub tkr: &'a str,
-    pub data_list: DataList,
 }
 
 #[derive(Clone)]

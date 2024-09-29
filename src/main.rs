@@ -1,4 +1,5 @@
-use std::io::stdout;
+use anyhow::Result;
+use cli_log::*;
 use ratatui::{
     backend::CrosstermBackend,
     crossterm::{
@@ -7,9 +8,9 @@ use ratatui::{
     },
     Terminal,
 };
-use tokio::sync::mpsc::{self, Sender, Receiver};
-use anyhow::Result;
-use cli_log::*;
+use std::env;
+use std::io::stdout;
+use tokio::sync::mpsc::{self, Receiver, Sender};
 
 mod tui;
 use tui::Tui;
@@ -21,7 +22,6 @@ mod components;
 
 const WS_URL: &str = "wss://stream.crypto.com/exchange/v1/market";
 
-
 #[tokio::main]
 async fn main() -> Result<()> {
     init_cli_log!();
@@ -30,9 +30,16 @@ async fn main() -> Result<()> {
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
     terminal.clear()?;
 
-    let (tx, rx): (Sender<TkrResult>, Receiver<TkrResult>)  = mpsc::channel(5);
-    
-    let mut ws_client = match WsClient::new(WS_URL, tx).connect().await {
+    let (tx, rx): (Sender<TkrResult>, Receiver<TkrResult>) = mpsc::channel(5);
+
+    // Get watchlist from args
+    let mut watchlist = vec!["BTCUSD-PERP", "ETHUSD-PERP"];
+    let args: Vec<String> = env::args().collect();
+    if args.len() > 1 {
+        watchlist = args[1..].iter().map(|tkr| tkr.as_str()).collect();
+    }
+
+    let mut ws_client = match WsClient::new(WS_URL, tx, watchlist.clone()).connect().await {
         Ok(ws) => ws,
         Err(e) => {
             debug!("WS Error: {}", e);
@@ -40,16 +47,16 @@ async fn main() -> Result<()> {
             stdout().execute(LeaveAlternateScreen)?;
             disable_raw_mode()?;
 
-            return Err(e)
+            return Err(e);
         }
     };
 
-    let tui = Tui::new(rx);
+    let tui = Tui::new(rx, watchlist.clone());
 
     // Run concurrent
     let result = tokio::try_join!(tui.run(terminal), ws_client.run());
     match result {
-        Ok((_tui, _ws)) => {},
+        Ok((_tui, _ws)) => {}
         Err(e) => debug!("Tasks interrupted: {}", e),
     }
 

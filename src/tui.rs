@@ -1,21 +1,19 @@
-use ratatui::{
-    crossterm::event::{self, KeyCode, KeyEventKind},
-    layout::{Constraint, Layout},
-    buffer::Buffer,
-    prelude::Rect,
-    widgets::{
-        Widget,
-        Paragraph,
-    },
-    DefaultTerminal,
-};
-use tokio::sync::mpsc::Receiver;
-use anyhow::Result;
-use cli_log::*;
 use crate::components::summary;
 use crate::components::tkr_tab::TkrTabs;
-use crate::models::{CryptoData, DataList, TkrResult};
-
+use crate::models::{DataList, TkrResult};
+use anyhow::Result;
+use cli_log::*;
+use ratatui::{
+    buffer::Buffer,
+    crossterm::event::{self, KeyCode, KeyEventKind},
+    layout::{Constraint, Layout},
+    prelude::Rect,
+    widgets::{Paragraph, Widget},
+    DefaultTerminal,
+};
+use std::collections::HashMap;
+use std::cmp::min;
+use tokio::sync::mpsc::Receiver;
 
 #[derive(PartialEq)]
 enum AppState {
@@ -27,40 +25,38 @@ pub struct Tui<'a> {
     rx: Receiver<TkrResult>,
     state: AppState,
     tkr_tabs: TkrTabs,
-    tkr_data: Vec<CryptoData<'a>>,
+    tkr_data: HashMap<String, DataList>,
+    watchlist: Vec<&'a str>,
 }
 
 impl<'a> Tui<'a> {
-    pub fn new(rx: Receiver<TkrResult>) -> Self{
+    pub fn new(rx: Receiver<TkrResult>, watchlist: Vec<&'a str>) -> Self {
         Self {
             rx,
             state: AppState::Running,
             tkr_tabs: TkrTabs::default(),
-            tkr_data: Vec::new()
+            tkr_data: HashMap::new(),
+            watchlist,
         }
     }
 
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         info!("Starting Tui");
-        let tkr_data_1 = CryptoData {tkr: "BTC", data_list: DataList::new(100)};
-        let tkr_data_2 = CryptoData {tkr: "ETH", data_list: DataList::new(100)};
-        self.tkr_data.push(tkr_data_1);
-        self.tkr_data.push(tkr_data_2);
+        for tkr in &self.watchlist {
+            let tkr_data = DataList::new(100);
+            self.tkr_data.insert(tkr.to_string(), tkr_data);
+        }
 
         while self.state == AppState::Running {
             match self.rx.try_recv() {
                 Ok(tkr_result) => {
-                    if tkr_result.tkr == "BTCUSD-PERP" {
-                        self.tkr_data[0].data_list.insert(&tkr_result);
-                    }
-                    if tkr_result.tkr == "ETHUSD-PERP" {
-                        self.tkr_data[1].data_list.insert(&tkr_result);
+                    if let Some(data) = self.tkr_data.get_mut(&tkr_result.tkr) {
+                        data.insert(&tkr_result);
                     }
                     info!("tkr_result: {:#?}", tkr_result);
-                },
-                Err(_e) => {},
+                }
+                Err(_e) => {}
             }
-
             terminal.draw(|frame| frame.render_widget(&self, frame.area()))?;
             self.handle_event()?;
 
@@ -76,14 +72,23 @@ impl<'a> Tui<'a> {
                     match key.code {
                         KeyCode::Char('q') => {
                             self.state = AppState::Quitting;
-                        },
+                        }
                         KeyCode::Char('1') => {
-                            self.tkr_tabs.select(1);
-                        },
+                            self.tkr_tabs.select(min(1, self.watchlist.len()));
+                        }
                         KeyCode::Char('2') => {
-                            self.tkr_tabs.select(2);
-                        },
-                        _ => {},
+                            self.tkr_tabs.select(min(2, self.watchlist.len()));
+                        }
+                        KeyCode::Char('3') => {
+                            self.tkr_tabs.select(min(3, self.watchlist.len()));
+                        }
+                        KeyCode::Char('4') => {
+                            self.tkr_tabs.select(min(4, self.watchlist.len()));
+                        }
+                        KeyCode::Char('5') => {
+                            self.tkr_tabs.select(min(5, self.watchlist.len()));
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -98,21 +103,23 @@ impl<'a> Widget for &Tui<'a> {
             Constraint::Length(1),
             Constraint::Min(0),
             Constraint::Length(1),
-        ]).areas(area);
+        ])
+        .areas(area);
 
-        let [_title_area, tabs_area] = Layout::horizontal([
-            Constraint::Percentage(50),
-            Constraint::Percentage(50),
-        ]).areas(header_area);
+        let [_title_area, tabs_area] =
+            Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .areas(header_area);
 
         let [left_area, right_area] =
             Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .areas(main_area);
 
-        Paragraph::new("Crypto Dashboard").render(header_area, buf); 
-        Paragraph::new("Press (q) to quit...").render(footer_area, buf); 
+        Paragraph::new("Crypto Dashboard").render(header_area, buf);
+        Paragraph::new("Press (q) to quit...").render(footer_area, buf);
         summary::render(left_area, buf, &self.tkr_data);
-        self.tkr_tabs.render_tabs(tabs_area, buf);
-        self.tkr_tabs.selected_tab.render(right_area, buf, &self.tkr_data);
+        self.tkr_tabs.render(tabs_area, buf, &self.watchlist);
+        self.tkr_tabs
+            .selected_tab
+            .render(right_area, buf, &self.tkr_data, &self.watchlist);
     }
 }

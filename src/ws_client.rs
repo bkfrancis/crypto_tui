@@ -1,18 +1,14 @@
-use tokio_tungstenite::{
-    connect_async,
-    tungstenite::protocol::Message,
-    WebSocketStream,
-    MaybeTlsStream,
-};
-use tokio::net::TcpStream;
-use tokio::sync::mpsc::Sender;
-use futures_util::{SinkExt, StreamExt};
-use serde::{Serialize, Deserialize};
-use serde_json;
+use crate::models::{TkrResponse, TkrResult};
 use anyhow::{anyhow, Result};
 use cli_log::*;
-use crate::models::{TkrResponse, TkrResult};
-
+use futures_util::{SinkExt, StreamExt};
+use serde::{Deserialize, Serialize};
+use serde_json;
+use tokio::net::TcpStream;
+use tokio::sync::mpsc::Sender;
+use tokio_tungstenite::{
+    connect_async, tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream,
+};
 
 #[derive(Deserialize)]
 struct Heartbeat {
@@ -21,18 +17,15 @@ struct Heartbeat {
     // code: i64,
 }
 
-
 pub struct WsClient<'a> {
     url: &'a str,
     tx: Sender<TkrResult>,
+    watchlist: Vec<&'a str>,
 }
 
 impl<'a> WsClient<'a> {
-    pub fn new(url: &'a str, tx: Sender<TkrResult>) -> Self {
-        Self {
-            url,
-            tx,
-        }
+    pub fn new(url: &'a str, tx: Sender<TkrResult>, watchlist: Vec<&'a str>) -> Self {
+        Self { url, tx, watchlist }
     }
 
     pub async fn connect(self) -> Result<WsClientConnected<'a>> {
@@ -40,16 +33,17 @@ impl<'a> WsClient<'a> {
 
         Ok(WsClientConnected {
             url: self.url,
-            ws_stream,
             tx: self.tx,
+            watchlist: self.watchlist,
+            ws_stream,
         })
     }
 }
 
-
 pub struct WsClientConnected<'a> {
     url: &'a str,
     tx: Sender<TkrResult>,
+    watchlist: Vec<&'a str>,
     ws_stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
 }
 
@@ -58,12 +52,12 @@ impl<'a> WsClientConnected<'a> {
         debug!("Connected ws_client");
 
         self.subscribe_tkr().await?;
-    
+
         while let Some(msg) = self.ws_stream.next().await {
             match msg {
                 Ok(Message::Text(text)) => {
                     let json_value: serde_json::Value = serde_json::from_str(&text)?;
-                   
+
                     let method = json_value.get("method").expect("none");
                     if method == "subscribe" {
                         let tkr_resp: TkrResponse = serde_json::from_value(json_value)?;
@@ -72,35 +66,30 @@ impl<'a> WsClientConnected<'a> {
                     } else if method == "public/heartbeat" {
                         let heartbeat: Heartbeat = serde_json::from_value(json_value)?;
                         self.heartbeat_response(heartbeat.id).await?;
-
                     } else {
                         debug!("Unmatched json: {:#?}", json_value);
-
                     }
                 }
                 Err(e) => return Err(anyhow!(e)),
-                _ => {},    // binary, pong, ping, etc
+                _ => {} // binary, pong, ping, etc
             }
         }
         Ok(())
     }
 
     async fn subscribe_tkr(&mut self) -> Result<()> {
-        let tkr_sub = serde_json::json!({
-            "id": 1,
-            "method": "subscribe",
-            "params": {"channels": ["ticker.BTCUSD-PERP"]},
-            "nonce": 1000,
-        });
-        self.ws_stream.send(Message::Text(tkr_sub.to_string())).await?;
-        
-        let tkr_sub = serde_json::json!({
-            "id": 1,
-            "method": "subscribe",
-            "params": {"channels": ["ticker.ETHUSD-PERP"]},
-            "nonce": 1001,
-        });
-        self.ws_stream.send(Message::Text(tkr_sub.to_string())).await?;
+        for tkr in self.watchlist.iter() {
+            let tkr_sub = serde_json::json!({
+                "id": 1,
+                "method": "subscribe",
+                "params": {"channels": [format!("ticker.{}", tkr)]},
+                "nonce": 1000,
+            });
+            self.ws_stream
+                .send(Message::Text(tkr_sub.to_string()))
+                .await?;
+        }
+
         Ok(())
     }
 
@@ -109,7 +98,9 @@ impl<'a> WsClientConnected<'a> {
             "id": id,
             "method": "public/respond-heartbeat",
         });
-        self.ws_stream.send(Message::Text(heartbeat.to_string())).await?;
+        self.ws_stream
+            .send(Message::Text(heartbeat.to_string()))
+            .await?;
         Ok(())
     }
 }

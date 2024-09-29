@@ -1,16 +1,12 @@
+use crate::models::DataList;
+use chrono::{DateTime, Local};
 use ratatui::{
     buffer::Buffer,
-    widgets::{
-        Block,
-        Table, Row, Cell,
-        Tabs,
-        Widget,
-    },
     prelude::{Constraint, Rect},
     style::{Color, Stylize},
+    widgets::{Block, Cell, Row, Table, Tabs, Widget},
 };
-use chrono::{DateTime, Local};
-use crate::models::CryptoData;
+use std::collections::HashMap;
 
 
 #[derive(Default)]
@@ -18,15 +14,14 @@ pub struct TkrTabs {
     pub selected_tab: SelectedTab,
 }
 
-impl Widget for TkrTabs {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        self.render_tabs(area, buf);
-    }
-}
-
 impl TkrTabs {
-    pub fn render_tabs(&self, area: Rect, buf: &mut Buffer) {
-        Tabs::new(["(1) BTC", "(2) ETH"])
+    pub fn render(&self, area: Rect, buf: &mut Buffer, watchlist: &Vec<&str>) {
+        let tab_names: Vec<String> = watchlist
+            .iter()
+            .enumerate()
+            .map(|(i, name)| format!("({}) {}", i + 1, name))
+            .collect();
+        Tabs::new(tab_names)
             .select(self.selected_tab as usize)
             .render(area, buf);
     }
@@ -35,43 +30,57 @@ impl TkrTabs {
         match i {
             1 => self.selected_tab = SelectedTab::Tab1,
             2 => self.selected_tab = SelectedTab::Tab2,
-            _ => {},
+            3 => self.selected_tab = SelectedTab::Tab3,
+            4 => self.selected_tab = SelectedTab::Tab4,
+            5 => self.selected_tab = SelectedTab::Tab5,
+            _ => {}
         }
     }
 }
-   
 
 #[derive(Default, Clone, Copy)]
 pub enum SelectedTab {
     #[default]
     Tab1,
     Tab2,
+    Tab3,
+    Tab4,
+    Tab5,
 }
 
 impl SelectedTab {
-    pub fn render(self, area: Rect, buf: &mut Buffer, data: &Vec<CryptoData>) {
+    pub fn render(
+        self,
+        area: Rect,
+        buf: &mut Buffer,
+        data: &HashMap<String, DataList>,
+        watchlist: &Vec<&str>,
+    ) {
         match self {
-            SelectedTab::Tab1 => self.render_tab(area, buf, &data[0]),
-            SelectedTab::Tab2 => self.render_tab(area, buf, &data[1]),
+            SelectedTab::Tab1 => self.render_tab(area, buf, &data[watchlist[0]]),
+            SelectedTab::Tab2 => self.render_tab(area, buf, &data[watchlist[1]]),
+            SelectedTab::Tab3 => self.render_tab(area, buf, &data[watchlist[2]]),
+            SelectedTab::Tab4 => self.render_tab(area, buf, &data[watchlist[3]]),
+            SelectedTab::Tab5 => self.render_tab(area, buf, &data[watchlist[4]]),
         }
     }
 
-    pub fn render_tab(self, area: Rect, buf: &mut Buffer, data: &CryptoData) {
+    pub fn render_tab(self, area: Rect, buf: &mut Buffer, data: &DataList) {
         let block = Block::bordered().title("Trades");
         let headers = Row::new(["Time", "Price", "Qty 24h", "Bid", "Ask"])
             .bg(Color::Rgb(205, 214, 244))
             .fg(Color::Rgb(17, 17, 27));
-      
+
         // Color scheme
         let green_color = Color::Rgb(166, 227, 161);
         let red_color = Color::Rgb(243, 139, 168);
         let fg_color = Color::Rgb(24, 24, 27);
 
-        let capacity = data.data_list.capacity;
+        let capacity = data.capacity;
         let mut rows: Vec<Row> = Vec::with_capacity(capacity);
-        
+
         // Construct rows
-        for i in data.data_list.get_order() {
+        for i in data.get_order() {
             // Reset color
             let mut row_bg_color = Color::Reset;
             let mut row_fg_color = Color::Reset;
@@ -79,8 +88,8 @@ impl SelectedTab {
             let mut ask_fg_color = Color::Reset;
 
             let i_prior = (capacity - 1) - ((capacity - i) % capacity);
-            let row_i = &data.data_list.data[i];
-            let row_prior = &data.data_list.data[i_prior];
+            let row_i = &data.data[i];
+            let row_prior = &data.data[i_prior];
 
             let qty_i = row_i.v.parse::<f64>().unwrap_or(0.0);
             let qty_prior = row_prior.v.parse::<f64>().unwrap_or(0.0);
@@ -90,7 +99,7 @@ impl SelectedTab {
             let bid_prior = row_prior.b.parse::<f64>().unwrap_or(0.0);
             let ask_i = row_i.k.parse::<f64>().unwrap_or(0.0);
             let ask_prior = row_prior.k.parse::<f64>().unwrap_or(0.0);
-            
+
             // Bid/ask color
             if bid_i > bid_prior {
                 bid_fg_color = green_color;
@@ -104,7 +113,7 @@ impl SelectedTab {
             if ask_i < ask_prior {
                 ask_fg_color = red_color;
             }
-            
+
             // Row color
             if qty_i > qty_prior {
                 if p_i > p_prior {
@@ -119,17 +128,23 @@ impl SelectedTab {
                     ask_fg_color = fg_color;
                 }
             }
-            
+
             rows.push(
                 Row::new([
-                    Cell::new(DateTime::from_timestamp_millis(row_i.t)
-                        .unwrap().with_timezone(&Local).format("%H:%M:%S").to_string()),
-                    Cell::new(format!("{:.2}", p_i)),       // last price
-                    Cell::new(format!("{:.4}", qty_i)),       // 24h volume
-                    Cell::new(row_i.b.clone()).fg(bid_fg_color),       // best bid
-                    Cell::new(row_i.k.clone()).fg(ask_fg_color),       // best ask
+                    Cell::new(
+                        DateTime::from_timestamp_millis(row_i.t)
+                            .unwrap()
+                            .with_timezone(&Local)
+                            .format("%H:%M:%S")
+                            .to_string(),
+                    ),
+                    Cell::new(format!("{:.2}", p_i)),   // last price
+                    Cell::new(format!("{:.4}", qty_i)), // 24h volume
+                    Cell::new(row_i.b.clone()).fg(bid_fg_color), // best bid
+                    Cell::new(row_i.k.clone()).fg(ask_fg_color), // best ask
                 ])
-                .bg(row_bg_color).fg(row_fg_color)
+                .bg(row_bg_color)
+                .fg(row_fg_color),
             );
         }
 
@@ -140,10 +155,11 @@ impl SelectedTab {
                 Constraint::Length(12),
                 Constraint::Length(12),
                 Constraint::Length(12),
-                Constraint::Length(12)
-            ])
-            .header(headers)
-            .block(block)
-            .render(area, buf);
+                Constraint::Length(12),
+            ],
+        )
+        .header(headers)
+        .block(block)
+        .render(area, buf);
     }
 }

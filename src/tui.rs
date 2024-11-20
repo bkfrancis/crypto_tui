@@ -11,8 +11,8 @@ use ratatui::{
     widgets::{Paragraph, Widget},
     DefaultTerminal,
 };
-use std::collections::HashMap;
 use std::cmp::min;
+use std::collections::HashMap;
 use tokio::sync::mpsc::Receiver;
 
 #[derive(PartialEq)]

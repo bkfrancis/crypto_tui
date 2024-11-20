@@ -8,7 +8,6 @@ use ratatui::{
 };
 use std::collections::HashMap;
 
-
 #[derive(Default)]
 pub struct TkrTabs {
     pub selected_tab: SelectedTab,

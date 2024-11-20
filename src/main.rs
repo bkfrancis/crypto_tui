@@ -22,6 +22,7 @@ mod components;
 
 const WS_URL: &str = "wss://stream.crypto.com/exchange/v1/market";
 
+
 #[tokio::main]
 async fn main() -> Result<()> {
     init_cli_log!();

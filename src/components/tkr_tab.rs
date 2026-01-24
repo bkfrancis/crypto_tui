@@ -14,17 +14,6 @@ pub struct TkrTabs {
 }
 
 impl TkrTabs {
-    pub fn render(&self, area: Rect, buf: &mut Buffer, watchlist: &Vec<&str>) {
-        let tab_names: Vec<String> = watchlist
-            .iter()
-            .enumerate()
-            .map(|(i, name)| format!("({}) {}", i + 1, name))
-            .collect();
-        Tabs::new(tab_names)
-            .select(self.selected_tab as usize)
-            .render(area, buf);
-    }
-
     pub fn select(&mut self, i: usize) {
         match i {
             1 => self.selected_tab = SelectedTab::Tab1,
@@ -34,6 +23,15 @@ impl TkrTabs {
             5 => self.selected_tab = SelectedTab::Tab5,
             _ => {}
         }
+    }
+
+    pub fn widget(&self, watchlist: &Vec<&str>) -> impl Widget {
+        let tab_names: Vec<String> = watchlist
+            .iter()
+            .enumerate()
+            .map(|(i, name)| format!("({}) {}", i + 1, name))
+            .collect();
+        Tabs::new(tab_names).select(self.selected_tab as usize)
     }
 }
 
@@ -48,23 +46,23 @@ pub enum SelectedTab {
 }
 
 impl SelectedTab {
-    pub fn render(
-        self,
-        area: Rect,
-        buf: &mut Buffer,
+    pub fn widget(
+        &self,
+        // area: Rect,
+        // buf: &mut Buffer,
         data: &HashMap<String, DataList>,
         watchlist: &Vec<&str>,
-    ) {
+    ) -> impl Widget {
         match self {
-            SelectedTab::Tab1 => self.render_tab(area, buf, &data[watchlist[0]]),
-            SelectedTab::Tab2 => self.render_tab(area, buf, &data[watchlist[1]]),
-            SelectedTab::Tab3 => self.render_tab(area, buf, &data[watchlist[2]]),
-            SelectedTab::Tab4 => self.render_tab(area, buf, &data[watchlist[3]]),
-            SelectedTab::Tab5 => self.render_tab(area, buf, &data[watchlist[4]]),
+            SelectedTab::Tab1 => self.render_tab(&data[watchlist[0]]),
+            SelectedTab::Tab2 => self.render_tab(&data[watchlist[1]]),
+            SelectedTab::Tab3 => self.render_tab(&data[watchlist[2]]),
+            SelectedTab::Tab4 => self.render_tab(&data[watchlist[3]]),
+            SelectedTab::Tab5 => self.render_tab(&data[watchlist[4]]),
         }
     }
 
-    pub fn render_tab(self, area: Rect, buf: &mut Buffer, data: &DataList) {
+    fn render_tab(self, data: &DataList) -> impl Widget {
         let block = Block::bordered().title("Trades");
         let headers = Row::new(["Time", "Price", "Qty 24h", "Bid", "Ask"])
             .bg(Color::Rgb(205, 214, 244))
@@ -159,6 +157,5 @@ impl SelectedTab {
         )
         .header(headers)
         .block(block)
-        .render(area, buf);
     }
 }

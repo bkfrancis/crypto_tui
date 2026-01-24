@@ -22,7 +22,6 @@ mod components;
 
 const WS_URL: &str = "wss://stream.crypto.com/exchange/v1/market";
 
-
 #[tokio::main]
 async fn main() -> Result<()> {
     init_cli_log!();
@@ -52,7 +51,7 @@ async fn main() -> Result<()> {
         }
     };
 
-    let tui = Tui::new(rx, watchlist.clone());
+    let tui = Tui::new(rx, &watchlist);
 
     // Run concurrent
     let result = tokio::try_join!(tui.run(terminal), ws_client.run());

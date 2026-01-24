@@ -9,7 +9,7 @@ use ratatui::{
     layout::{Constraint, Layout},
     prelude::Rect,
     widgets::{Paragraph, Widget},
-    DefaultTerminal,
+    DefaultTerminal, Frame,
 };
 use std::cmp::min;
 use std::collections::HashMap;
@@ -26,11 +26,11 @@ pub struct Tui<'a> {
     state: AppState,
     tkr_tabs: TkrTabs,
     tkr_data: HashMap<String, DataList>,
-    watchlist: Vec<&'a str>,
+    watchlist: &'a Vec<&'a str>,
 }
 
 impl<'a> Tui<'a> {
-    pub fn new(rx: Receiver<TkrResult>, watchlist: Vec<&'a str>) -> Self {
+    pub fn new(rx: Receiver<TkrResult>, watchlist: &'a Vec<&'a str>) -> Self {
         Self {
             rx,
             state: AppState::Running,
@@ -42,7 +42,7 @@ impl<'a> Tui<'a> {
 
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         info!("Starting Tui");
-        for tkr in &self.watchlist {
+        for tkr in self.watchlist {
             let tkr_data = DataList::new(100);
             self.tkr_data.insert(tkr.to_string(), tkr_data);
         }
@@ -57,7 +57,8 @@ impl<'a> Tui<'a> {
                 }
                 Err(_e) => {}
             }
-            terminal.draw(|frame| frame.render_widget(&self, frame.area()))?;
+            // terminal.draw(|frame| frame.render_widget(&self, frame.area()))?;
+            terminal.draw(|frame| self.render(frame))?;
             self.handle_event()?;
 
             tokio::task::yield_now().await;
@@ -95,16 +96,15 @@ impl<'a> Tui<'a> {
         }
         Ok(())
     }
-}
 
-impl<'a> Widget for &Tui<'a> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+    // fn render(self, area: Rect, buf: &mut Buffer) {
+    fn render(&mut self, frame: &mut Frame) {
         let [header_area, main_area, footer_area] = Layout::vertical([
             Constraint::Length(1),
             Constraint::Min(0),
             Constraint::Length(1),
         ])
-        .areas(area);
+        .areas(frame.area());
 
         let [_title_area, tabs_area] =
             Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -114,12 +114,15 @@ impl<'a> Widget for &Tui<'a> {
             Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .areas(main_area);
 
-        Paragraph::new("Crypto Dashboard").render(header_area, buf);
-        Paragraph::new("Press (q) to quit...").render(footer_area, buf);
-        summary::render(left_area, buf, &self.tkr_data);
-        self.tkr_tabs.render(tabs_area, buf, &self.watchlist);
-        self.tkr_tabs
-            .selected_tab
-            .render(right_area, buf, &self.tkr_data, &self.watchlist);
+        frame.render_widget(Paragraph::new("Crypto Dashboard"), frame.area());
+        frame.render_widget(Paragraph::new("Press (q) to quit..."), frame.area());
+        frame.render_widget(summary::Summary::new(&self.tkr_data), left_area);
+        frame.render_widget(self.tkr_tabs.widget(&self.watchlist), tabs_area);
+        frame.render_widget(
+            self.tkr_tabs
+                .selected_tab
+                .widget(&self.tkr_data, &self.watchlist),
+            right_area,
+        );
     }
 }

@@ -3,7 +3,7 @@ Development of a crypto currency dashboard.
 
 ## Features
 - Watch real-time asset pair ticker data from crypto.com
-- Stream of asset trades in separate tabs
+- Stream of asset trades in separate tabs & candlestick chart
 - pass in asset watchlist of up to 5 pairs
 
 ## Usage: cargo

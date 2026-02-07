@@ -3,8 +3,9 @@ use chrono::{DateTime, Local};
 use ratatui::{
     buffer::Buffer,
     prelude::{Constraint, Rect},
-    style::{Color, Stylize},
-    widgets::{Block, Cell, Row, Table, Tabs, Widget},
+    style::{Color, Modifier, Style, Stylize},
+    symbols,
+    widgets::{Block, Cell, Chart, Dataset, Row, Table, Tabs, Widget},
 };
 use std::collections::HashMap;
 
@@ -46,7 +47,7 @@ pub enum SelectedTab {
 }
 
 impl SelectedTab {
-    pub fn widget(
+    pub fn widget_trades(
         &self,
         // area: Rect,
         // buf: &mut Buffer,

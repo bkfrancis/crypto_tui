@@ -1,3 +1,4 @@
+use crate::components::chart;
 use crate::components::summary;
 use crate::components::tkr_tab::TkrTabs;
 use crate::models::{DataList, TkrResult};
@@ -43,7 +44,7 @@ impl<'a> Tui<'a> {
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         info!("Starting Tui");
         for tkr in self.watchlist {
-            let tkr_data = DataList::new(100);
+            let tkr_data = DataList::new(1_000);
             self.tkr_data.insert(tkr.to_string(), tkr_data);
         }
 
@@ -57,7 +58,6 @@ impl<'a> Tui<'a> {
                 }
                 Err(_e) => {}
             }
-            // terminal.draw(|frame| frame.render_widget(&self, frame.area()))?;
             terminal.draw(|frame| self.render(frame))?;
             self.handle_event()?;
 
@@ -113,16 +113,25 @@ impl<'a> Tui<'a> {
         let [left_area, right_area] =
             Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .areas(main_area);
+        let [top_left_area, bottom_left_area] =
+            Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .areas(left_area);
 
         frame.render_widget(Paragraph::new("Crypto Dashboard"), frame.area());
         frame.render_widget(Paragraph::new("Press (q) to quit..."), frame.area());
-        frame.render_widget(summary::Summary::new(&self.tkr_data), left_area);
+        frame.render_widget(summary::Summary::new(&self.tkr_data), top_left_area);
+        frame.render_widget(
+            chart::TkrChart::new(
+                &self.tkr_data[self.watchlist[self.tkr_tabs.selected_tab as usize]],
+            ),
+            right_area,
+        );
         frame.render_widget(self.tkr_tabs.widget(&self.watchlist), tabs_area);
         frame.render_widget(
             self.tkr_tabs
                 .selected_tab
-                .widget(&self.tkr_data, &self.watchlist),
-            right_area,
+                .widget_trades(&self.tkr_data, &self.watchlist),
+            bottom_left_area,
         );
     }
 }
